@@ -30,8 +30,8 @@ section{box-shadow:0 6px 22px #a47cc313;margin-top:8px}
 <div class="shiori-date-box"><label>しおりの日付 <input id="shioriDate" type="date"/></label><button id="shioriToday" type="button">今日</button><button id="shioriCalendar" type="button">📅 カレンダーへ</button></div>
 <div class="shiori-one-page"><h3 id="shioriHeading">この日のしおり</h3>
 <p class="hint">カレンダーの予定と1日の行動を、ここでまとめて確認できるよ♡</p>
-<div id="shioriLinkedEvents"></div>
-<h4 class="shiori-subtitle">🕒 1日のスケジュール</h4>
+<p class="hint">カレンダーの予定も、ここに時間順で自動表示されるよ。カレンダーの予定はカレンダー側で編集してね。</p>
+<h4 class="shiori-subtitle">🕒 1日のスケジュール（カレンダー連携）</h4>
 <ul class="shiori-timeline" id="schedules"></ul>
 <div class="shiori-editor"><h3 id="shioriFormTitle">＋ しおりの予定を追加</h3><label>時間 <input id="scheduleTime" type="time"/></label><input aria-label="予定名" id="scheduleTitle" placeholder="予定（例：出発・物販・食事）"/><input aria-label="予定のメモ" id="scheduleNote" placeholder="メモ（任意）"/><button id="addSchedule" type="button">＋ 予定を保存</button><button hidden="" id="cancelSchedule" type="button">編集をやめる</button><p class="hint" id="shioriStatus" role="status"></p></div>
 </div>
@@ -146,15 +146,40 @@ function resetScheduleEdit(){scheduleEditing=-1;$('scheduleTime').value='';$('sc
 function openShiori(date){if(date){$('shioriDate').value=date;selectedDate=date;const [y,m]=date.split('-').map(Number);calendarYear=y;calendarMonth=m-1}resetScheduleEdit();location.hash='schedule';renderShiori();}
 function renderShiori(){
  const date=shioriDate();$('shioriHeading').textContent=date.replace(/-/g,'/')+' のしおり';
- const linked=$('shioriLinkedEvents');linked.replaceChildren();
- const todaysEvents=state.events.filter(e=>e.date===date).sort((a,b)=>(a.time||a.start||a.doors||'').localeCompare(b.time||b.start||b.doors||''));
- if(!todaysEvents.length)linked.append(el('p','この日のカレンダー予定はまだありません。'));
- todaysEvents.forEach(e=>{const box=el('div');box.className='shiori-linked';box.style.borderLeft='5px solid '+eventColorOf(e);box.append(el('strong','📅 '+e.name));const desc=eventTypeOf(e)==='live'?((e.doors?'🚪 開場 '+e.doors+'　':'')+(e.start?'🎤 開演 '+e.start:'')):(e.time?'🕒 '+e.time:'');if(desc)box.append(el('p',desc));if(e.note)box.append(el('small',e.note));linked.append(box)});
  const root=$('schedules');root.replaceChildren();
- const rows=state.schedules.map((x,i)=>({...x,index:i})).filter(x=>x.date===date).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
- if(!rows.length)root.append(el('li','この日のしおりにはまだ予定がありません。下の入力欄から追加してね！'));
- rows.forEach(x=>{const li=el('li');li.append(el('strong',(x.time||'時間未設定')+'　'+x.title));if(x.note)li.append(el('p',x.note));li.append(action('編集',()=>{scheduleEditing=x.index;$('scheduleTime').value=x.time||'';$('scheduleTitle').value=x.title;$('scheduleNote').value=x.note||'';$('addSchedule').textContent='変更を保存';$('cancelSchedule').hidden=false;$('scheduleTitle').focus()}),action('削除',()=>{if(!confirm('このしおりの予定を削除しますか？'))return;const old=state.schedules.slice();state.schedules.splice(x.index,1);if(!save()){state.schedules=old;return}resetScheduleEdit();renderShiori()}));root.append(li)});
- const index=$('shioriIndex');index.replaceChildren();const dates=[...new Set(state.schedules.map(x=>x.date).filter(Boolean))].sort();
+ const rows=[];
+ state.events.forEach((e,i)=>{
+  if(e.date!==date)return;
+  const base={source:'calendar',eventIndex:i,color:eventColorOf(e),note:e.note||''};
+  if(eventTypeOf(e)==='live'){
+   if(e.doors)rows.push({...base,time:e.doors,title:'🚪 開場：'+e.name});
+   if(e.start)rows.push({...base,time:e.start,title:'🎤 開演：'+e.name});
+   if(!e.doors&&!e.start)rows.push({...base,time:'',title:'🎤 '+e.name});
+  }else rows.push({...base,time:e.time||'',title:(eventTypeOf(e)==='deadline'?'🎫 ':'📌 ')+e.name});
+ });
+ state.schedules.forEach((x,i)=>{if(x.date===date)rows.push({...x,source:'shiori',index:i})});
+ rows.sort((a,b)=>{
+  if(!a.time)return 1;
+  if(!b.time)return -1;
+  return a.time.localeCompare(b.time);
+ });
+ if(!rows.length)root.append(el('li','この日の予定はまだありません。カレンダーや下の入力欄から追加してね！'));
+ rows.forEach(x=>{
+  const li=el('li');
+  if(x.source==='calendar'){
+   li.style.borderLeftColor=x.color;
+   li.append(el('strong',(x.time||'時間未設定')+'　'+x.title));
+   li.append(el('small','📅 カレンダーの予定'));
+   if(x.note)li.append(el('p',x.note));
+   li.append(action('カレンダーで確認・編集',()=>{selectedDate=date;const [y,m]=date.split('-').map(Number);calendarYear=y;calendarMonth=m-1;renderCalendar();location.hash='events'}));
+  }else{
+   li.append(el('strong',(x.time||'時間未設定')+'　'+x.title));
+   if(x.note)li.append(el('p',x.note));
+   li.append(action('編集',()=>{scheduleEditing=x.index;$('scheduleTime').value=x.time||'';$('scheduleTitle').value=x.title;$('scheduleNote').value=x.note||'';$('addSchedule').textContent='変更を保存';$('cancelSchedule').hidden=false;$('scheduleTitle').focus()}),action('削除',()=>{if(!confirm('このしおりの予定を削除しますか？'))return;const old=state.schedules.slice();state.schedules.splice(x.index,1);if(!save()){state.schedules=old;return}resetScheduleEdit();renderShiori()}));
+  }
+  root.append(li);
+ });
+ const index=$('shioriIndex');index.replaceChildren();const dates=[...new Set([...state.schedules.map(x=>x.date),...state.events.map(x=>x.date)].filter(Boolean))].sort();
  if(!dates.length)index.append(el('p','しおりを作るとここに日付が並ぶよ。'));
  dates.forEach(d=>{const b=action('📖 '+d.replace(/-/g,'/'),()=>openShiori(d));b.className='shiori-index-btn';index.append(b)});
  const legacy=state.schedules.map((x,i)=>({...x,index:i})).filter(x=>!x.date);$('legacyScheduleBox').hidden=!legacy.length;
