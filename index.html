@@ -34,43 +34,5 @@ function resetEdit(){editing=-1;$('saveMemory').textContent='思い出を保存'
 $('cancelEdit').addEventListener('click',resetEdit);
 $('saveMemory').addEventListener('click',()=>{const m={event:$('memoryEvent').value.trim(),date:$('memoryDate').value,venue:$('memoryVenue').value.trim(),seat:$('memorySeat').value.trim(),setlist:$('memorySetlist').value.trim(),impression:$('memoryImpression').value.trim()};if(!m.event&&!m.venue&&!m.seat&&!m.setlist&&!m.impression){$('memoryStatus').textContent='公演名や感想など、少なくとも1つ入力してね';return}if(editing>=0&&editing<state.memories.length)state.memories[editing]=m;else state.memories.push(m);const ok=save();resetEdit();$('memoryStatus').textContent=ok?'思い出を保存しました！':'保存に失敗しました';render()});
 render();
-})();<!doctype html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Oshi Days ♡</title><style>:root{font-family:system-ui,sans-serif;color:#43364f;background:#fcf7ff}body{max-width:750px;margin:auto;padding:20px}h1{color:#8a5fa9}section{background:white;border:1px solid #eadcf4;border-radius:16px;padding:18px;margin:18px 0}input,button,textarea{font:inherit;padding:10px;border-radius:9px;border:1px solid #cdb9df;max-width:100%;box-sizing:border-box}input{margin:4px}button{background:#a47cc3;color:white;border:0;cursor:pointer;margin:4px}li{margin:10px 0}small{color:#786b81}.total{font-size:1.3em;font-weight:bold}</style></head><body><h1>Oshi Days ♡</h1><p>推し活の準備をまとめよう！</p><section><h2>📅 イベント登録</h2><input id="eventName" placeholder="公演名" aria-label="公演名"><input id="eventDate" type="date" aria-label="公演日"><button id="addEvent">登録する</button><ul id="events"></ul></section><section><h2>🎒 持ち物リスト</h2><input id="itemName" placeholder="持ち物" aria-label="持ち物"><button id="addItem">追加する</button><ul id="items"></ul></section><section><h2>🛍️ グッズ購入予算</h2><input id="goodsName" placeholder="グッズ名" aria-label="グッズ名"><input id="goodsPrice" type="number" min="0" placeholder="単価（円）" aria-label="単価"><input id="goodsQty" type="number" min="1" value="1" aria-label="個数"><button id="addGoods">追加する</button><ul id="goods"></ul><p class="total" id="total"></p></section><section><h2>🕒 当日のスケジュール</h2><label>時間 <input id="scheduleTime" type="time"></label><input id="scheduleTitle" placeholder="予定（例：開場）"><input id="scheduleNote" placeholder="メモ（任意）"><button id="addSchedule">予定を追加</button><ul id="schedules"></ul></section><section><h2>💗 ライブの思い出</h2><input id="memoryEvent" placeholder="公演名"><label>公演日 <input id="memoryDate" type="date" value="2026-10-13"></label><input id="memoryVenue" placeholder="会場"><input id="memorySeat" placeholder="座席"><p>セットリスト</p><textarea id="memorySetlist" rows="4" style="width:100%" placeholder="1. 曲名&#10;2. 曲名"></textarea><p>感想</p><textarea id="memoryImpression" rows="4" style="width:100%" placeholder="ライブの感想"></textarea><p><button id="saveMemory">思い出を保存</button><button id="cancelEdit" type="button" hidden>編集をやめる</button></p><p id="memoryStatus" role="status"></p><h3>保存した思い出一覧</h3><div id="memoryList"></div></section><p id="message" role="status"></p><small>データはこのブラウザ内に保存されます。別の端末とは同期されません。</small><script>
-(function(){'use strict';
-const key='oshi-days-v1', $=id=>document.getElementById(id);
-let state;try{state=JSON.parse(localStorage.getItem(key))||{}}catch(e){state={}}
-for(const k of ['events','items','goods','schedules','memories'])if(!Array.isArray(state[k]))state[k]=[];
-let editing=-1;
-function notify(msg){$('message').textContent=msg}
-function save(){try{localStorage.setItem(key,JSON.stringify(state));notify('保存しました！');return true}catch(e){notify('保存できませんでした。ブラウザの保存容量や設定を確認してね。');return false}}
-function el(tag,text){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n}
-function action(label,fn){const b=el('button',label);b.type='button';b.addEventListener('click',fn);return b}
-function render(){
-for(const name of ['events','items','goods']){
- const root=$(name);root.replaceChildren();state[name].forEach((entry,index)=>{
- const li=el('li');if(name==='items'){const cb=el('input');cb.type='checkbox';cb.checked=!!entry.done;cb.addEventListener('change',()=>{entry.done=cb.checked;save()});li.append(cb,document.createTextNode(' '+entry.name+' '))}
- else if(name==='events')li.append(el('span',entry.name+'（'+entry.date+'） '));
- else li.append(el('span',entry.name+'：'+(entry.price*entry.qty).toLocaleString()+'円（'+entry.qty+'個） '));
- li.append(action('削除',()=>{state[name].splice(index,1);save();render()}));root.append(li)
- })
-}
-$('total').textContent='合計：'+state.goods.reduce((sum,g)=>sum+g.price*g.qty,0).toLocaleString()+'円';
-const scheduleRoot=$('schedules');scheduleRoot.replaceChildren();
-const ordered=state.schedules.map((x,i)=>({...x,index:i})).sort((a,b)=>a.time.localeCompare(b.time));
-if(!ordered.length)scheduleRoot.append(el('li','まだ予定はありません'));
-ordered.forEach(x=>{const li=el('li',x.time+'　'+x.title+(x.note?'（'+x.note+'）':'')+' ');li.append(action('編集',()=>{$('scheduleTime').value=x.time;$('scheduleTitle').value=x.title;$('scheduleNote').value=x.note||'';state.schedules.splice(x.index,1);save();render();$('scheduleTitle').focus()}),action('削除',()=>{state.schedules.splice(x.index,1);save();render()}));scheduleRoot.append(li)});
-const memRoot=$('memoryList');memRoot.replaceChildren();
-if(!state.memories.length)memRoot.append(el('p','まだ思い出は登録されていません。'));
-state.memories.forEach((m,i)=>{const article=el('article');article.style='border-top:1px solid #eadcf4;padding:12px 0';article.append(el('h4',m.event||'無題の公演'),el('p','日付：'+(m.date||'未入力')+' ／ 会場：'+(m.venue||'未入力')+' ／ 座席：'+(m.seat||'未入力')),el('strong','セットリスト'));const set=el('p',m.setlist||'未入力');set.style.whiteSpace='pre-wrap';article.append(set,el('strong','感想'));const imp=el('p',m.impression||'未入力');imp.style.whiteSpace='pre-wrap';article.append(imp,action('編集',()=>{editing=i;for(const [id,k] of [['memoryEvent','event'],['memoryDate','date'],['memoryVenue','venue'],['memorySeat','seat'],['memorySetlist','setlist'],['memoryImpression','impression']])$(id).value=m[k]||'';$('saveMemory').textContent='編集を保存';$('cancelEdit').hidden=false;$('memoryStatus').textContent='編集中：'+(m.event||'無題の公演');$('memoryEvent').focus()}),action('削除',()=>{if(!confirm('この思い出を削除しますか？'))return;state.memories.splice(i,1);resetEdit();save();render()}));memRoot.append(article)})
-}
-$('addEvent').addEventListener('click',()=>{const name=$('eventName').value.trim(),date=$('eventDate').value;if(!name||!date)return notify('公演名と日付を入力してね');state.events.push({name,date});$('eventName').value='';save();render()});
-$('addItem').addEventListener('click',()=>{const name=$('itemName').value.trim();if(!name)return notify('持ち物を入力してね');state.items.push({name,done:false});$('itemName').value='';save();render()});
-$('addGoods').addEventListener('click',()=>{const name=$('goodsName').value.trim(),price=Number($('goodsPrice').value),qty=Number($('goodsQty').value);if(!name||$('goodsPrice').value===''||!Number.isFinite(price)||price<0||!Number.isInteger(qty)||qty<1)return notify('グッズ名・単価・個数を正しく入力してね');state.goods.push({name,price,qty});$('goodsName').value='';$('goodsPrice').value='';$('goodsQty').value='1';save();render()});
-$('addSchedule').addEventListener('click',()=>{const time=$('scheduleTime').value,title=$('scheduleTitle').value.trim(),note=$('scheduleNote').value.trim();if(!time||!title)return notify('予定の時間と内容を入力してね');state.schedules.push({time,title,note});$('scheduleTitle').value='';$('scheduleNote').value='';save();render()});
-function resetEdit(){editing=-1;$('saveMemory').textContent='思い出を保存';$('cancelEdit').hidden=true;for(const id of ['memoryEvent','memoryVenue','memorySeat','memorySetlist','memoryImpression'])$(id).value='';$('memoryStatus').textContent=''}
-$('cancelEdit').addEventListener('click',resetEdit);
-$('saveMemory').addEventListener('click',()=>{const m={event:$('memoryEvent').value.trim(),date:$('memoryDate').value,venue:$('memoryVenue').value.trim(),seat:$('memorySeat').value.trim(),setlist:$('memorySetlist').value.trim(),impression:$('memoryImpression').value.trim()};if(!m.event&&!m.venue&&!m.seat&&!m.setlist&&!m.impression){$('memoryStatus').textContent='公演名や感想など、少なくとも1つ入力してね';return}if(editing>=0&&editing<state.memories.length)state.memories[editing]=m;else state.memories.push(m);const ok=save();resetEdit();$('memoryStatus').textContent=ok?'思い出を保存しました！':'保存に失敗しました';render()});
-render();
 })();
-</script></body></html>
-
 </script></body></html>
